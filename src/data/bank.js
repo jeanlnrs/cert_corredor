@@ -89,7 +89,7 @@ const RAW = {
   ],
   capitales: [
     ['Un bono de $1,000 con cupón 10% se compra a 92% y vence en 10 años. ¿YTM aproximado?', ['10.00%', '10.87%', '11.25%', '12.22%'], 2, '(100 + 80/10) / ((1,000 + 920)/2) = 108 / 960 = 11.25%.', 'Curso', true],
-    ['Mismo bono (a 92%, cupón 10%) con call a 101% en el año 5. ¿YTC aproximado?', ['11.25%', '12.22%', '10.87%', '13.00%'], 1, '(100 + 90/5) / ((1,010 + 920)/2) = 118 / 965 = 12.22%.', 'Curso', true],
+    ['Un bono de $1,000 con cupón 10% se compra a 92%, vence en 10 años y tiene call a 101% en el año 5. ¿YTC aproximado (asumiendo que lo llaman en el año 5)?', ['11.25%', '12.22%', '10.87%', '13.00%'], 1, '(100 + 90/5) / ((1,010 + 920)/2) = 118 / 965 = 12.22%.', 'Curso', true],
     ['Rendimiento corriente de un bono cupón 10% comprado a 92%:', ['10.00%', '10.87%', '11.25%', '9.20%'], 1, '100 / 920 = 10.87%.', 'Curso', true],
     ['Cupón corrido al 15 de marzo de un bono de $1,000, 8% anual, pago trimestral (último pago 31/12), base 30/360:', ['$16.22', '$16.44', '$16.67', '$20.00'], 2, 'Días 30/360 = 30 + 30 + 15 = 75 → 1,000 × 8% × 75/360 = 16.67. (Actual/360 = 16.44; Actual/365 = 16.22.)', 'Curso', true],
     ['¿Qué rendimiento representa el peor escenario entre YTM, YTC y YTP?', ['Rendimiento nominal', 'Rendimiento corriente', 'YTW (yield to worst)', 'Rendimiento real'], 2, '—', 'Curso'],

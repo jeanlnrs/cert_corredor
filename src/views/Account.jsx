@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../lib/auth.jsx';
+import { initialAuthError } from '../lib/supabase.js';
 import { useProgress } from '../lib/progress.jsx';
 import Icon from '../components/Icon.jsx';
 
@@ -11,13 +12,25 @@ export const SYNC_LABEL = {
   error: 'Error al sincronizar',
 };
 
+// Supabase responde en inglés; se traducen los casos más comunes.
+function friendlyError(e) {
+  const msg = e?.message || '';
+  if (/rate limit|after \d+ seconds|too many/i.test(msg)) {
+    return 'Se enviaron demasiados correos en poco tiempo. Espera unos minutos antes de pedir otro enlace.';
+  }
+  if (/invalid.*email|email.*invalid|unable to validate email/i.test(msg)) return 'Ese correo no parece válido. Revísalo e intenta de nuevo.';
+  if (/failed to fetch|network/i.test(msg)) return 'No hay conexión con el servidor. Revisa tu internet e intenta de nuevo.';
+  return msg || 'Algo salió mal. Intenta de nuevo.';
+}
+
 export default function Account() {
   const { enabled, ready, user, sendMagicLink, signOut } = useAuth();
-  const { sync } = useProgress();
+  const { sync, flush } = useProgress();
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
+  // Arranca con el error del enlace mágico si el usuario volvió con uno vencido o inválido.
+  const [error, setError] = useState(initialAuthError);
 
   const run = async (fn) => {
     setBusy(true);
@@ -25,7 +38,7 @@ export default function Account() {
     try {
       await fn();
     } catch (e) {
-      setError(e.message || 'Algo salió mal. Intenta de nuevo.');
+      setError(friendlyError(e));
     } finally {
       setBusy(false);
     }
@@ -72,7 +85,17 @@ export default function Account() {
           <p className="small muted">
             Tu progreso se guarda automáticamente unos segundos después de cada respuesta y se actualiza al volver a esta pestaña.
           </p>
-          <button className="btn" onClick={() => run(signOut)} disabled={busy}>
+          <p className="small muted">Al cerrar sesión, tu progreso se borra de este navegador (queda guardado en tu cuenta).</p>
+          <button
+            className="btn"
+            disabled={busy}
+            onClick={() =>
+              run(async () => {
+                await flush();
+                await signOut();
+              })
+            }
+          >
             <Icon name="arrowLeft" /> Cerrar sesión
           </button>
         </div>
@@ -115,7 +138,7 @@ export default function Account() {
       )}
 
       <p className="tiny faint mt">
-        Al iniciar sesión por primera vez, el progreso que ya tienes en este navegador se combina con el de tu cuenta: no se pierde nada.
+        Al iniciar sesión, lo que estudiaste aquí como invitado se suma a tu cuenta: no se pierde nada. Cada cuenta tiene su propio progreso.
       </p>
     </div>
   );

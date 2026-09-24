@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ALL_QUESTIONS, TOPICS, TOPIC_BY_ID } from '../data/index.js';
 import { useProgress } from '../lib/progress.jsx';
-import { pct, shuffle } from '../lib/utils.js';
+import { answerIndexFromKey, isShortcutToIgnore, pct, shuffle } from '../lib/utils.js';
 import QuestionCard from '../components/QuestionCard.jsx';
 import Icon from '../components/Icon.jsx';
 import Ring from '../components/Ring.jsx';
@@ -14,10 +14,19 @@ const FILTERS = [
 ];
 const COUNTS = [10, 20, 40, 0];
 
+// Cada inicio (o reinicio) de práctica recibe un id nuevo: se usa como `key` para que
+// PracticeSession arranque con estado limpio (índice, respuestas y resumen).
+export function usePracticeRun() {
+  const [run, setRun] = useState(null);
+  const start = useCallback((questions) => setRun({ id: `${Date.now()}-${Math.random()}`, questions }), []);
+  const stop = useCallback(() => setRun(null), []);
+  return [run, start, stop];
+}
+
 export default function Practice({ topicId, go }) {
-  const [session, setSession] = useState(null);
-  if (session) return <PracticeSession questions={session} onExit={() => setSession(null)} onRestart={setSession} go={go} />;
-  return <Setup initialTopic={topicId} onStart={setSession} />;
+  const [run, start, stop] = usePracticeRun();
+  if (run) return <PracticeSession key={run.id} questions={run.questions} onExit={stop} onRestart={start} go={go} />;
+  return <Setup initialTopic={topicId} onStart={start} />;
 }
 
 function Setup({ initialTopic, onStart }) {
@@ -119,11 +128,11 @@ export function PracticeSession({ questions, onExit, onRestart, go }) {
   useEffect(() => {
     if (done) return undefined;
     const onKey = (e) => {
-      if (e.target.tagName === 'INPUT') return;
-      const k = e.key.toLowerCase();
-      const idx = '12345'.indexOf(k) >= 0 ? '12345'.indexOf(k) : 'abcde'.indexOf(k);
+      if (isShortcutToIgnore(e)) return;
+      const idx = answerIndexFromKey(e.key);
       if (idx >= 0 && idx < q.o.length && !revealed) choose(idx);
-      else if (k === 'enter' && revealed) next();
+      // Si el foco está en un botón, Enter ya lo activa: no avanzar dos veces.
+      else if (e.key === 'Enter' && revealed && e.target.tagName !== 'BUTTON') next();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

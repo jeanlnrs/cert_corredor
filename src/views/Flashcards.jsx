@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FLASHCARDS, TOPIC_BY_ID, TOPICS } from '../data/index.js';
 import { useProgress } from '../lib/progress.jsx';
-import { shuffle } from '../lib/utils.js';
+import { isShortcutToIgnore, shuffle } from '../lib/utils.js';
 import Icon from '../components/Icon.jsx';
 
 const BOX_LABELS = ['Nueva', 'Aprendiendo', 'Repasando', 'Casi dominada', 'Dominada'];
@@ -45,7 +45,7 @@ export default function Flashcards({ topicId }) {
 
   useEffect(() => {
     const onKey = (e) => {
-      if (!card) return;
+      if (!card || isShortcutToIgnore(e)) return;
       if (e.key === ' ') {
         e.preventDefault();
         setFlipped((f) => !f);
@@ -71,7 +71,7 @@ export default function Flashcards({ topicId }) {
       <div className="card">
         <div className="row between">
           <div className="row" style={{ gap: 8 }}>
-            <select className="input" style={{ width: 'auto' }} value={deck} onChange={(e) => setDeck(e.target.value)}>
+            <select className="input" aria-label="Mazo de tarjetas" style={{ width: 'auto' }} value={deck} onChange={(e) => setDeck(e.target.value)}>
               <option value="all">Todos los temas ({FLASHCARDS.length})</option>
               {TOPICS.filter((t) => FLASHCARDS.some((c) => c.topic === t.id)).map((t) => (
                 <option key={t.id} value={t.id}>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ALL_QUESTIONS, EXAM_PRESETS, PASS_MARK, TOPIC_BY_ID } from '../data/index.js';
 import { useProgress } from '../lib/progress.jsx';
-import { LETTERS, fmtDate, fmtTime, pct, sampleBalanced } from '../lib/utils.js';
+import { LETTERS, answerIndexFromKey, fmtDate, fmtTime, isShortcutToIgnore, pct, sampleBalanced } from '../lib/utils.js';
 import QuestionCard from '../components/QuestionCard.jsx';
 import Icon from '../components/Icon.jsx';
 import Ring from '../components/Ring.jsx';
@@ -53,14 +53,14 @@ function ExamHome({ onStart }) {
             {p.configurable ? (
               <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div className="field">
-                  <label>Preguntas</label>
-                  <select className="input" value={count} onChange={(e) => setCount(Number(e.target.value))}>
+                  <label htmlFor="sim-count">Preguntas</label>
+                  <select id="sim-count" className="input" value={count} onChange={(e) => setCount(Number(e.target.value))}>
                     {[25, 40, 60, 100].map((n) => <option key={n} value={n}>{n}</option>)}
                   </select>
                 </div>
                 <div className="field">
-                  <label>Minutos</label>
-                  <select className="input" value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
+                  <label htmlFor="sim-minutes">Minutos</label>
+                  <select id="sim-minutes" className="input" value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
                     {[30, 45, 60, 90, 120, 150].map((n) => <option key={n} value={n}>{n}</option>)}
                   </select>
                 </div>
@@ -165,11 +165,16 @@ function ExamSession({ run, onCancel, onFinish }) {
 
   useEffect(() => {
     const onKey = (e) => {
-      if (confirm) return;
-      const k = e.key.toLowerCase();
-      const idx = '12345'.indexOf(k) >= 0 ? '12345'.indexOf(k) : 'abcde'.indexOf(k);
+      if (confirm) {
+        if (e.key === 'Escape') setConfirm(false);
+        return;
+      }
+      if (isShortcutToIgnore(e)) return;
+      const idx = answerIndexFromKey(e.key);
       if (idx >= 0 && idx < q.o.length) setAnswers((a) => ({ ...a, [q.id]: idx }));
-      else if (k === 'arrowright') setI((v) => Math.min(v + 1, questions.length - 1));
+      const k = e.key.toLowerCase();
+      if (idx >= 0) return;
+      if (k === 'arrowright') setI((v) => Math.min(v + 1, questions.length - 1));
       else if (k === 'arrowleft') setI((v) => Math.max(v - 1, 0));
     };
     window.addEventListener('keydown', onKey);
@@ -236,16 +241,18 @@ function ExamSession({ run, onCancel, onFinish }) {
         <div
           role="dialog"
           aria-modal="true"
+          aria-labelledby="confirm-title"
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', display: 'grid', placeItems: 'center', zIndex: 50, padding: 16 }}
           onClick={() => setConfirm(false)}
         >
           <div className="card" style={{ maxWidth: 420, width: '100%' }} onClick={(e) => e.stopPropagation()}>
-            <h2>¿Entregar el examen?</h2>
+            <h2 id="confirm-title">¿Entregar el examen?</h2>
             <p className="muted mt">
               {unanswered > 0 ? `Tienes ${unanswered} preguntas sin responder; contarán como incorrectas.` : 'Respondiste todas las preguntas.'}
             </p>
             <div className="row mt-lg" style={{ justifyContent: 'flex-end' }}>
-              <button className="btn" onClick={() => setConfirm(false)}>Seguir revisando</button>
+              {/* eslint-disable-next-line jsx-a11y/no-autofocus -- foco inicial del diálogo */}
+              <button className="btn" autoFocus onClick={() => setConfirm(false)}>Seguir revisando</button>
               <button className="btn primary" onClick={submit}>Entregar</button>
             </div>
           </div>

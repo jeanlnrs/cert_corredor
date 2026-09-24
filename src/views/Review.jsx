@@ -4,14 +4,14 @@ import { useProgress } from '../lib/progress.jsx';
 import { shuffle } from '../lib/utils.js';
 import QuestionCard from '../components/QuestionCard.jsx';
 import Icon from '../components/Icon.jsx';
-import { PracticeSession } from './Practice.jsx';
+import { PracticeSession, usePracticeRun } from './Practice.jsx';
 
 export default function Review({ go }) {
   const { state, toggleFlag } = useProgress();
   const [tab, setTab] = useState('wrong');
-  const [session, setSession] = useState(null);
+  const [run, start, stop] = usePracticeRun();
 
-  if (session) return <PracticeSession questions={session} onExit={() => setSession(null)} onRestart={setSession} go={go} />;
+  if (run) return <PracticeSession key={run.id} questions={run.questions} onExit={stop} onRestart={start} go={go} />;
 
   const wrong = ALL_QUESTIONS.filter((q) => state.q[q.id]?.last === false);
   const flagged = ALL_QUESTIONS.filter((q) => state.flags[q.id]);
@@ -26,7 +26,7 @@ export default function Review({ go }) {
           <p>Las preguntas que fallaste en tu último intento, las que marcaste y las que conviene confirmar con el texto oficial.</p>
         </div>
         {list.length > 0 && tab !== 'verify' && (
-          <button className="btn primary" onClick={() => setSession(shuffle(list))}>
+          <button className="btn primary" onClick={() => start(shuffle(list))}>
             <Icon name="play" /> Practicar estas {list.length}
           </button>
         )}

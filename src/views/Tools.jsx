@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { TOPICS } from '../data/index.js';
 import { money, perc } from '../lib/utils.js';
 
@@ -70,12 +70,18 @@ function FormulaSheet() {
 }
 
 function Num({ label, value, onChange, step = 'any', suffix }) {
+  const id = useId();
   return (
     <div className="field">
-      <label>{label}{suffix ? ` (${suffix})` : ''}</label>
-      <input className="input" type="number" inputMode="decimal" step={step} value={value} onChange={(e) => onChange(e.target.value)} />
+      <label htmlFor={id}>{label}{suffix ? ` (${suffix})` : ''}</label>
+      <input id={id} className="input" type="number" inputMode="decimal" step={step} value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
+}
+
+// Muestra un aviso cuando los datos no permiten calcular (campos vacíos, ceros, negativos).
+function Invalid({ children }) {
+  return <div className="callout warn small"><div>{children}</div></div>;
 }
 
 const n = (v) => {
@@ -127,6 +133,8 @@ function bondPrice(face, cRate, freq, years, y) {
 }
 function solveYtm(face, cRate, freq, years, price) {
   let lo = -0.99, hi = 5;
+  // Si el precio queda fuera del rango alcanzable, no hay una tasa razonable que lo explique.
+  if (bondPrice(face, cRate, freq, years, hi) > price || bondPrice(face, cRate, freq, years, lo) < price) return NaN;
   for (let k = 0; k < 200; k++) {
     const mid = (lo + hi) / 2;
     if (bondPrice(face, cRate, freq, years, mid) > price) lo = mid;
@@ -146,21 +154,28 @@ function BondCalc() {
   const [callYears, setCallYears] = useState('5');
 
   const F = n(face), C = n(coupon) / 100, f = n(freq), Y = n(years);
-  const price = bondPrice(F, C, f, Y, n(ytm) / 100);
+  // Datos mínimos para que las fórmulas tengan sentido.
+  const baseOk = F > 0 && C >= 0 && f > 0 && Y > 0 && Math.round(Y * f) >= 1;
+  const priceOk = baseOk && n(ytm) > -100;
+  const price = priceOk ? bondPrice(F, C, f, Y, n(ytm) / 100) : NaN;
   const P = (n(pricePct) / 100) * F;
+  const yieldsOk = baseOk && P > 0;
   const annualC = F * C;
-  const cy = annualC / P;
-  const ytmApprox = (annualC + (F - P) / Y) / ((F + P) / 2);
-  const ytmExact = solveYtm(F, C, f, Y, P);
+  const cy = yieldsOk ? annualC / P : NaN;
+  const ytmApprox = yieldsOk ? (annualC + (F - P) / Y) / ((F + P) / 2) : NaN;
+  const ytmExact = yieldsOk ? solveYtm(F, C, f, Y, P) : NaN;
   const Pc = (n(callPct) / 100) * F;
-  const ytc = (annualC + (Pc - P) / n(callYears)) / ((Pc + P) / 2);
+  const callOk = yieldsOk && Pc > 0 && n(callYears) > 0;
+  const ytc = callOk ? (annualC + (Pc - P) / n(callYears)) / ((Pc + P) / 2) : NaN;
 
   return (
     <div className="stack">
       <Panel
         title="Precio a partir del YTM"
         result={
-          <>
+          !priceOk ? (
+            <Invalid>Ingresa un valor nominal y años mayores que cero, una tasa cupón no negativa y un YTM mayor que −100%.</Invalid>
+          ) : <>
             <div className="result-box">
               <div className="small muted">Precio del bono</div>
               <div className="v">{money(price)}</div>
@@ -179,8 +194,8 @@ function BondCalc() {
           <Num label="Valor nominal" value={face} onChange={setFace} />
           <Num label="Tasa cupón anual" suffix="%" value={coupon} onChange={setCoupon} />
           <div className="field">
-            <label>Pagos por año</label>
-            <select className="input" value={freq} onChange={(e) => setFreq(e.target.value)}>
+            <label htmlFor="bond-freq">Pagos por año</label>
+            <select id="bond-freq" className="input" value={freq} onChange={(e) => setFreq(e.target.value)}>
               <option value="1">Anual (1)</option>
               <option value="2">Semestral (2)</option>
               <option value="4">Trimestral (4)</option>
@@ -195,7 +210,9 @@ function BondCalc() {
       <Panel
         title="Rendimientos a partir del precio"
         result={
-          <KV rows={[
+          !yieldsOk ? (
+            <Invalid>Ingresa un precio de compra mayor que cero (y los datos del bono en el bloque superior).</Invalid>
+          ) : <KV rows={[
             ['Rendimiento nominal (NY)', perc(C)],
             ['Rendimiento corriente (CY)', perc(cy)],
             ['YTM aproximado (fórmula del curso)', perc(ytmApprox)],
@@ -229,7 +246,11 @@ function TvmCalc() {
   if (solve === 'vp') { result = money(n(vf) / Math.pow(1 + i, N)); formula = 'VP = VF / (1 + i)^n'; }
   if (solve === 'vf') { result = money(n(vp) * Math.pow(1 + i, N)); formula = 'VF = VP × (1 + i)^n'; }
   if (solve === 'i') { result = perc(Math.pow(n(vf) / n(vp), 1 / N) - 1, 4); formula = 'i = (VF / VP)^(1/n) − 1'; }
-  if (solve === 'n') { result = (Math.log(n(vf) / n(vp)) / Math.log(1 + i)).toFixed(3) + ' períodos'; formula = 'n = ln(VF / VP) / ln(1 + i)'; }
+  if (solve === 'n') {
+    const periodsNeeded = Math.log(n(vf) / n(vp)) / Math.log(1 + i);
+    result = Number.isFinite(periodsNeeded) && periodsNeeded >= 0 ? `${periodsNeeded.toFixed(3)} períodos` : '—';
+    formula = 'n = ln(VF / VP) / ln(1 + i)';
+  }
 
   return (
     <Panel
@@ -310,8 +331,8 @@ function AccruedCalc() {
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <Num label="Valor nominal" value={face} onChange={setFace} />
         <Num label="Tasa cupón anual" suffix="%" value={rate} onChange={setRate} />
-        <div className="field"><label>Fecha del último cupón</label><input className="input" type="date" value={last} onChange={(e) => setLast(e.target.value)} /></div>
-        <div className="field"><label>Fecha de liquidación</label><input className="input" type="date" value={settle} onChange={(e) => setSettle(e.target.value)} /></div>
+        <div className="field"><label htmlFor="cc-last">Fecha del último cupón</label><input id="cc-last" className="input" type="date" value={last} onChange={(e) => setLast(e.target.value)} /></div>
+        <div className="field"><label htmlFor="cc-settle">Fecha de liquidación</label><input id="cc-settle" className="input" type="date" value={settle} onChange={(e) => setSettle(e.target.value)} /></div>
       </div>
     </Panel>
   );
@@ -326,6 +347,7 @@ function OptionCalc() {
   const [spot, setSpot] = useState('110');
 
   const K = n(strike), Pm = n(premium), S = n(spot);
+  const valid = K > 0 && Pm >= 0 && S >= 0;
   const intrinsic = (s) => (type === 'call' ? Math.max(s - K, 0) : Math.max(K - s, 0));
   const pnl = (s) => (side === 'buy' ? 1 : -1) * (intrinsic(s) - Pm);
   const be = type === 'call' ? K + Pm : K - Pm;
@@ -347,7 +369,9 @@ function OptionCalc() {
     <Panel
       title="Opción al vencimiento"
       result={
-        <>
+        !valid ? (
+          <Invalid>Ingresa un precio de ejercicio mayor que cero, y una prima y un precio spot que no sean negativos.</Invalid>
+        ) : <>
           <svg className="chart" viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Gráfico de ganancia o pérdida">
             <line x1={pad} x2={W - pad} y1={H / 2} y2={H / 2} stroke="var(--border)" />
             <line x1={X(K)} x2={X(K)} y1={pad / 2} y2={H - pad / 2} stroke="var(--border)" strokeDasharray="4 4" />
@@ -411,11 +435,15 @@ function StockCalc() {
           <Num label="N (nuevas)" value={ratioN} onChange={setRatioN} />
           <Num label="M (anteriores)" value={ratioM} onChange={setRatioM} />
         </div>
-        <KV rows={[
-          ['Nuevas acciones', money((n(shares) * n(ratioN)) / n(ratioM), 0)],
-          ['Nuevo precio', money((n(price) * n(ratioM)) / n(ratioN))],
-          ['Capitalización (no cambia)', money(n(shares) * n(price), 0)],
-        ]} />
+        {n(shares) > 0 && n(price) > 0 && n(ratioN) > 0 && n(ratioM) > 0 ? (
+          <KV rows={[
+            ['Nuevas acciones', money((n(shares) * n(ratioN)) / n(ratioM), 0)],
+            ['Nuevo precio', money((n(price) * n(ratioM)) / n(ratioN))],
+            ['Capitalización (no cambia)', money(n(shares) * n(price), 0)],
+          ]} />
+        ) : (
+          <Invalid>Todos los valores del split deben ser mayores que cero.</Invalid>
+        )}
       </div>
       <div className="card stack">
         <h3>Bono convertible</h3>
@@ -424,12 +452,16 @@ function StockCalc() {
           <Num label="Precio del bono" suffix="%" value={bondPct} onChange={setBondPct} />
           <Num label="Precio de la acción" value={stock} onChange={setStock} />
         </div>
-        <KV rows={[
-          ['Factor de conversión (nominal $1,000)', `${factor.toFixed(2)} acciones`],
-          ['Precio de paridad de la acción', money(parity)],
-          ['Valor de conversión', money(factor * n(stock))],
-          ['¿Conviene convertir?', n(stock) > parity ? 'Sí: la acción vale más que la paridad' : 'No'],
-        ]} />
+        {n(conv) > 0 && n(bondPct) > 0 && n(stock) >= 0 ? (
+          <KV rows={[
+            ['Factor de conversión (nominal $1,000)', `${factor.toFixed(2)} acciones`],
+            ['Precio de paridad de la acción', money(parity)],
+            ['Valor de conversión', money(factor * n(stock))],
+            ['¿Conviene convertir?', n(stock) > parity ? 'Sí: la acción vale más que la paridad' : 'No'],
+          ]} />
+        ) : (
+          <Invalid>Ingresa un precio de conversión y un precio del bono mayores que cero.</Invalid>
+        )}
       </div>
       <div className="card stack">
         <h3>Rentabilidad esperada</h3>
@@ -492,9 +524,9 @@ function PortfolioCalc() {
               {names.map((nm, k) => (
                 <tr key={nm}>
                   <td><strong>{nm}</strong></td>
-                  <td><input className="input" type="number" value={probs[k]} onChange={(e) => setProbs((ps) => ps.map((x, i) => (i === k ? e.target.value : x)))} /></td>
+                  <td><input className="input" type="number" aria-label={`Probabilidad escenario ${nm} (%)`} value={probs[k]} onChange={(e) => setProbs((ps) => ps.map((x, i) => (i === k ? e.target.value : x)))} /></td>
                   {assets.map((a, j) => (
-                    <td key={a}><input className="input" type="number" value={rets[k][j]} onChange={(e) => setCell(k, j, e.target.value)} /></td>
+                    <td key={a}><input className="input" type="number" aria-label={`Retorno de ${a} en ${nm} (%)`} value={rets[k][j]} onChange={(e) => setCell(k, j, e.target.value)} /></td>
                   ))}
                 </tr>
               ))}
@@ -502,7 +534,7 @@ function PortfolioCalc() {
                 <td><strong>Peso %</strong></td>
                 <td className="faint small">{Math.round(p.reduce((a, b) => a + b, 0) * 100)}%</td>
                 {assets.map((a, j) => (
-                  <td key={a}><input className="input" type="number" value={weights[j]} onChange={(e) => setWeights((ws) => ws.map((x, i) => (i === j ? e.target.value : x)))} /></td>
+                  <td key={a}><input className="input" type="number" aria-label={`Peso de ${a} en el portafolio (%)`} value={weights[j]} onChange={(e) => setWeights((ws) => ws.map((x, i) => (i === j ? e.target.value : x)))} /></td>
                 ))}
               </tr>
             </tbody>

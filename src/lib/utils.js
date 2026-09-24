@@ -1,5 +1,20 @@
 export const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
 
+// Atajos de teclado: A–E o 1–5 eligen una opción. Devuelve -1 si la tecla no es de respuesta.
+export function answerIndexFromKey(key) {
+  if (!key || key.length !== 1) return -1;
+  const k = key.toLowerCase();
+  const byNumber = '12345'.indexOf(k);
+  return byNumber >= 0 ? byNumber : 'abcde'.indexOf(k);
+}
+
+// No reaccionar a combinaciones como Ctrl+C / Cmd+A ni a teclas escritas en campos de texto.
+export function isShortcutToIgnore(e) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return true;
+  const tag = e.target?.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !!e.target?.isContentEditable;
+}
+
 export function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {

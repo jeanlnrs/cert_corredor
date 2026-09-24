@@ -7,14 +7,47 @@ import { mergeProgress } from './merge.js';
 const SAVE_DELAY_MS = 1500;
 
 const KEY = 'cv-progress-v1';
+// Cuenta a la que pertenece el progreso guardado en este navegador ('' = invitado).
+const OWNER_KEY = 'cv-progress-owner';
 const EMPTY = { q: {}, cards: {}, lessons: {}, exams: [], days: [], flags: {} };
+
+const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+
+// Normaliza datos guardados (localStorage o nube) para que un valor corrupto no rompa la app.
+function sanitize(raw) {
+  if (!isObj(raw)) return EMPTY;
+  return {
+    q: isObj(raw.q) ? raw.q : {},
+    cards: isObj(raw.cards) ? raw.cards : {},
+    lessons: isObj(raw.lessons) ? raw.lessons : {},
+    exams: Array.isArray(raw.exams) ? raw.exams : [],
+    days: Array.isArray(raw.days) ? raw.days : [],
+    flags: isObj(raw.flags) ? raw.flags : {},
+  };
+}
 
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? { ...EMPTY, ...JSON.parse(raw) } : EMPTY;
+    return raw ? sanitize(JSON.parse(raw)) : EMPTY;
   } catch {
     return EMPTY;
+  }
+}
+
+function readOwner() {
+  try {
+    return localStorage.getItem(OWNER_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function writeOwner(id) {
+  try {
+    localStorage.setItem(OWNER_KEY, id || '');
+  } catch {
+    /* sin almacenamiento */
   }
 }
 
@@ -26,6 +59,9 @@ const ProgressContext = createContext(null);
 export function ProgressProvider({ children }) {
   const [state, setState] = useState(load);
   const { user } = useAuth();
+  // Se usa el id (no el objeto) para no re-sincronizar cada vez que Supabase refresca el token.
+  const userId = user?.id ?? null;
+  const prevUserId = useRef(null);
   // idle | loading | saving | saved | error
   const [sync, setSync] = useState({ status: 'idle', at: null, error: null });
   const stateRef = useRef(state);
@@ -49,52 +85,71 @@ export function ProgressProvider({ children }) {
     setSync(error ? { status: 'error', at: null, error: error.message } : { status: 'saved', at: Date.now(), error: null });
   }, []);
 
-  // Descarga el progreso de la nube y lo combina con el de este navegador.
-  const pull = useCallback(async (userId) => {
-    const { data, error } = await supabase.from('progress').select('data').eq('user_id', userId).maybeSingle();
+  // Descarga el progreso de la nube y lo combina con `base` (el progreso local que corresponde a esta cuenta).
+  const pull = useCallback(async (id, base) => {
+    const { data, error } = await supabase.from('progress').select('data').eq('user_id', id).maybeSingle();
     if (error) {
       setSync({ status: 'error', at: null, error: error.message });
       return false;
     }
-    const merged = mergeProgress(stateRef.current, data?.data ? { ...EMPTY, ...data.data } : null);
+    const merged = mergeProgress(base, data?.data ? sanitize(data.data) : null);
     setState(merged);
-    await upload(userId, merged);
+    writeOwner(id);
+    await upload(id, merged);
     return true;
   }, [upload]);
 
-  // Al iniciar sesión (o cambiar de usuario): combinar local + nube.
+  // Al iniciar sesión, cerrar sesión o cambiar de usuario.
   useEffect(() => {
     hydratedFor.current = null;
-    if (!supabase || !user) {
+    const previous = prevUserId.current;
+    prevUserId.current = userId;
+
+    if (!supabase || !userId) {
       setSync({ status: 'idle', at: null, error: null });
-      return;
+      // Al cerrar sesión se limpia este navegador: el progreso queda a salvo en la cuenta
+      // y la próxima persona que use el equipo no lo hereda.
+      if (previous) {
+        setState(EMPTY);
+        writeOwner('');
+      }
+      return undefined;
     }
+
+    // Solo se combina el progreso de invitado o el de esta misma cuenta, nunca el de otra.
+    const owner = readOwner();
+    const base = !owner || owner === userId ? stateRef.current : EMPTY;
     let cancelled = false;
     setSync({ status: 'loading', at: null, error: null });
-    pull(user.id).then((ok) => {
-      if (!cancelled && ok) hydratedFor.current = user.id;
+    pull(userId, base).then((ok) => {
+      if (!cancelled && ok) hydratedFor.current = userId;
     });
     return () => {
       cancelled = true;
     };
-  }, [user, pull]);
+  }, [userId, pull]);
+
+  // Guarda de inmediato (se usa antes de cerrar sesión para no perder los últimos segundos).
+  const flush = useCallback(async () => {
+    if (userId && hydratedFor.current === userId) await upload(userId, stateRef.current);
+  }, [userId, upload]);
 
   // Guardado automático con retardo tras cada cambio.
   useEffect(() => {
-    if (!user || hydratedFor.current !== user.id) return undefined;
-    const t = setTimeout(() => upload(user.id, state), SAVE_DELAY_MS);
+    if (!userId || hydratedFor.current !== userId) return undefined;
+    const t = setTimeout(() => upload(userId, state), SAVE_DELAY_MS);
     return () => clearTimeout(t);
-  }, [state, user, upload]);
+  }, [state, userId, upload]);
 
   // Al volver a la pestaña, traer lo estudiado en otros dispositivos.
   useEffect(() => {
-    if (!user) return undefined;
+    if (!userId) return undefined;
     const onVisible = () => {
-      if (document.visibilityState === 'visible' && hydratedFor.current === user.id) pull(user.id);
+      if (document.visibilityState === 'visible' && hydratedFor.current === userId) pull(userId, stateRef.current);
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [user, pull]);
+  }, [userId, pull]);
 
   const touchDay = (s) => {
     const d = todayKey();
@@ -141,8 +196,8 @@ export function ProgressProvider({ children }) {
   const reset = useCallback(() => setState(EMPTY), []);
 
   const value = useMemo(
-    () => ({ state, sync, recordAnswer, recordExam, markLesson, rateCard, toggleFlag, reset }),
-    [state, sync, recordAnswer, recordExam, markLesson, rateCard, toggleFlag, reset],
+    () => ({ state, sync, flush, recordAnswer, recordExam, markLesson, rateCard, toggleFlag, reset }),
+    [state, sync, flush, recordAnswer, recordExam, markLesson, rateCard, toggleFlag, reset],
   );
   return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>;
 }
