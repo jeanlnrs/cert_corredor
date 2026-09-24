@@ -17,12 +17,21 @@ export function AuthProvider({ children }) {
     return () => data.subscription.unsubscribe();
   }, []);
 
-  // Envía el enlace mágico. El usuario vuelve a la misma URL desde la que lo pidió.
-  const sendMagicLink = useCallback(async (email) => {
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}${window.location.pathname}` },
-    });
+  /** Registrar cuenta nueva con email + contraseña */
+  const signUp = useCallback(async (email, password) => {
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (error) throw error;
+  }, []);
+
+  /** Iniciar sesión con email + contraseña */
+  const signIn = useCallback(async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+  }, []);
+
+  /** Cambiar la contraseña del usuario autenticado */
+  const updatePassword = useCallback(async (newPassword) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) throw error;
   }, []);
 
@@ -31,8 +40,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ enabled: !!supabase, ready, user: session?.user ?? null, sendMagicLink, signOut }),
-    [ready, session, sendMagicLink, signOut],
+    () => ({ enabled: !!supabase, ready, user: session?.user ?? null, signUp, signIn, updatePassword, signOut }),
+    [ready, session, signUp, signIn, updatePassword, signOut],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
