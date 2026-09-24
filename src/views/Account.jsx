@@ -12,10 +12,9 @@ export const SYNC_LABEL = {
 };
 
 export default function Account() {
-  const { enabled, ready, user, sendMagicLink, verifyCode, signOut } = useAuth();
+  const { enabled, ready, user, sendMagicLink, signOut } = useAuth();
   const { sync } = useProgress();
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -104,23 +103,11 @@ export default function Account() {
               <div className="callout tip">
                 <Icon name="check" />
                 <div>
-                  Te enviamos un enlace a <strong>{email}</strong>. Ábrelo <strong>en este mismo navegador</strong> para iniciar sesión.
+                  Te enviamos un enlace a <strong>{email}</strong>. Ábrelo <strong>en el dispositivo donde quieras estudiar</strong> (computadora o celular) y quedarás dentro.
                 </div>
               </div>
-              <form
-                className="stack"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  run(() => verifyCode(email.trim(), code.trim()));
-                }}
-              >
-                <div className="field">
-                  <label htmlFor="code">¿El correo trae un código de 6 dígitos? Escríbelo aquí</label>
-                  <input id="code" className="input" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} />
-                </div>
-                <button className="btn" disabled={busy || code.trim().length < 6}>Entrar con el código</button>
-              </form>
-              <button className="btn ghost sm" onClick={() => { setSent(false); setCode(''); }}>Usar otro correo o reenviar</button>
+              <p className="small muted">¿No llegó? Revisa la carpeta de spam. El enlace vence en una hora y solo sirve una vez.</p>
+              <button className="btn ghost sm" onClick={() => setSent(false)}>Usar otro correo o reenviar</button>
             </div>
           )}
           {error && <div className="callout warn"><Icon name="alert" /><div>{error}</div></div>}

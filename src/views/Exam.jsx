@@ -176,7 +176,10 @@ function ExamSession({ run, onCancel, onFinish }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [q, questions.length, confirm]);
 
-  useEffect(() => window.scrollTo({ top: 0 }), [i]);
+  // Con llaves: en Chrome reciente scrollTo devuelve una Promise y React la trataría como limpieza.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [i]);
 
   const answered = Object.keys(answers).length;
   const unanswered = questions.length - answered;

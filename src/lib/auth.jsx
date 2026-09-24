@@ -26,19 +26,13 @@ export function AuthProvider({ children }) {
     if (error) throw error;
   }, []);
 
-  // Alternativa al enlace: el código de 6 dígitos del correo (útil si el correo se abre en otro navegador).
-  const verifyCode = useCallback(async (email, token) => {
-    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
-    if (error) throw error;
-  }, []);
-
   const signOut = useCallback(async () => {
     await supabase?.auth.signOut();
   }, []);
 
   const value = useMemo(
-    () => ({ enabled: !!supabase, ready, user: session?.user ?? null, sendMagicLink, verifyCode, signOut }),
-    [ready, session, sendMagicLink, verifyCode, signOut],
+    () => ({ enabled: !!supabase, ready, user: session?.user ?? null, sendMagicLink, signOut }),
+    [ready, session, sendMagicLink, signOut],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

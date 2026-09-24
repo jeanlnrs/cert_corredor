@@ -129,7 +129,10 @@ export function PracticeSession({ questions, onExit, onRestart, go }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [q, revealed, choose, next, done]);
 
-  useEffect(() => window.scrollTo({ top: 0 }), [i]);
+  // Con llaves: en Chrome reciente scrollTo devuelve una Promise y React la trataría como limpieza.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [i]);
 
   const answeredCount = Object.keys(answers).length;
   const correctCount = questions.filter((x) => answers[x.id] === x.a).length;

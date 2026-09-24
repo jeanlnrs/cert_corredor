@@ -32,7 +32,8 @@ El progreso se guarda en el `localStorage` del navegador y, si inicias sesión, 
 4. En **Project Settings → API**, copia la *Project URL* y la llave *anon public*:
    - Local: copia `.env.example` como `.env.local` y complétalo.
    - Vercel: **Settings → Environment Variables** → `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`, y vuelve a desplegar.
-5. (Opcional) Para que el correo incluya también un código de 6 dígitos, en **Authentication → Email Templates → Magic Link** agrega `{{ .Token }}` a la plantilla.
+5. El enlace mágico inicia sesión en el navegador donde se abra (flujo implícito), así que funciona aunque el correo se abra en el celular.
+6. El servicio de correo incluido en Supabase tiene un límite bajo de envíos por hora; para más volumen configura un SMTP propio en **Authentication → Emails → SMTP Settings**.
 
 Nunca uses la llave `service_role` en esta app.
 
