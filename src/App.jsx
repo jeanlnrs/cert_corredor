@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ProgressProvider, useProgress } from './lib/progress.jsx';
+import { AuthProvider, useAuth } from './lib/auth.jsx';
+import Account, { SYNC_LABEL } from './views/Account.jsx';
 import Icon from './components/Icon.jsx';
 import Dashboard from './views/Dashboard.jsx';
 import Study from './views/Study.jsx';
@@ -17,6 +19,7 @@ const NAV = [
   { id: 'tarjetas', label: 'Tarjetas', icon: 'cards' },
   { id: 'herramientas', label: 'Calculadoras', icon: 'calc' },
   { id: 'repaso', label: 'Mis errores', icon: 'refresh' },
+  { id: 'cuenta', label: 'Cuenta', icon: 'user' },
 ];
 const MOBILE_NAV = ['inicio', 'estudiar', 'practicar', 'examen', 'tarjetas', 'herramientas'];
 
@@ -49,7 +52,8 @@ function useTheme() {
 function Shell() {
   const [route, setRoute] = useState(parseHash);
   const [isDark, toggleTheme] = useTheme();
-  const { reset } = useProgress();
+  const { reset, sync } = useProgress();
+  const { enabled, user } = useAuth();
 
   useEffect(() => {
     const on = () => setRoute(parseHash());
@@ -76,12 +80,16 @@ function Shell() {
     case 'tarjetas': content = <Flashcards key={key} topicId={params[0]} />; break;
     case 'herramientas': content = <Tools key={key} />; break;
     case 'repaso': content = <Review key={key} go={go} />; break;
+    case 'cuenta': content = <Account key={key} />; break;
     default: content = <Dashboard go={go} />;
   }
 
   const confirmReset = () => {
-    if (window.confirm('¿Borrar todo tu progreso (respuestas, tarjetas y simulacros)? Esta acción no se puede deshacer.')) reset();
+    const where = user ? ' en este navegador y en tu cuenta' : '';
+    if (window.confirm(`¿Borrar todo tu progreso (respuestas, tarjetas y simulacros)${where}? Esta acción no se puede deshacer.`)) reset();
   };
+
+  const accountLabel = !enabled ? 'Solo en este navegador' : user ? SYNC_LABEL[sync.status] : 'Inicia sesión para sincronizar';
 
   return (
     <div className="app">
@@ -93,7 +101,7 @@ function Shell() {
             <small>Preparación · SMV Panamá</small>
           </div>
         </div>
-        {NAV.map((n) => (
+        {NAV.filter((n) => n.id !== 'cuenta').map((n) => (
           <button key={n.id} className={`nav-item ${view === n.id ? 'active' : ''}`} onClick={() => go(n.id)}>
             <Icon name={n.icon} /> {n.label}
           </button>
@@ -105,7 +113,15 @@ function Shell() {
           <button className="nav-item" onClick={confirmReset}>
             <Icon name="x" /> Reiniciar progreso
           </button>
-          <p className="tiny faint" style={{ padding: '6px 12px' }}>Tu progreso se guarda en este navegador.</p>
+          <button className={`nav-item ${view === 'cuenta' ? 'active' : ''}`} onClick={() => go('cuenta')} style={{ alignItems: 'flex-start' }}>
+            <Icon name={user ? 'cloud' : 'user'} />
+            <span style={{ minWidth: 0 }}>
+              <span className="small" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user ? user.email : 'Cuenta'}
+              </span>
+              <span className="tiny faint" style={{ color: sync.status === 'error' ? 'var(--danger)' : undefined }}>{accountLabel}</span>
+            </span>
+          </button>
         </div>
       </aside>
 
@@ -114,9 +130,14 @@ function Shell() {
           <button className="btn sm ghost" onClick={() => go('repaso')}>
             <Icon name="refresh" /> Mis errores
           </button>
-          <button className="btn sm ghost" onClick={toggleTheme} aria-label="Cambiar tema">
-            <Icon name={isDark ? 'sun' : 'moon'} />
-          </button>
+          <span className="row" style={{ gap: 4 }}>
+            <button className="btn sm ghost" onClick={() => go('cuenta')} aria-label="Cuenta" style={{ color: sync.status === 'error' ? 'var(--danger)' : undefined }}>
+              <Icon name={user ? 'cloud' : 'user'} /> {user ? 'Sincronizado' : 'Entrar'}
+            </button>
+            <button className="btn sm ghost" onClick={toggleTheme} aria-label="Cambiar tema">
+              <Icon name={isDark ? 'sun' : 'moon'} />
+            </button>
+          </span>
         </div>
         {content}
       </main>
@@ -135,8 +156,10 @@ function Shell() {
 
 export default function App() {
   return (
-    <ProgressProvider>
-      <Shell />
-    </ProgressProvider>
+    <AuthProvider>
+      <ProgressProvider>
+        <Shell />
+      </ProgressProvider>
+    </AuthProvider>
   );
 }

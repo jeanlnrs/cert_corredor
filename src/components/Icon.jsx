@@ -23,6 +23,8 @@ const PATHS = {
   shuffle: 'M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5',
   play: 'M7 4v16l13-8z',
   chart: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+  user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0',
+  cloud: 'M7 18a5 5 0 0 1-.5-9.97A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z',
 };
 
 export default function Icon({ name, size, className, strokeWidth = 2 }) {

@@ -20,7 +20,21 @@ npm run build    # versión estática en dist/
 - **Calculadoras**: hoja de fórmulas, bonos (precio/YTM/YTC), valor del dinero, cupón corrido, opciones con gráfico, acciones/convertibles, portafolio, CAPM/Sharpe y divisas.
 - **Mis errores**: preguntas falladas, marcadas y las que conviene verificar con el texto oficial.
 
-El progreso se guarda en el `localStorage` del navegador.
+El progreso se guarda en el `localStorage` del navegador y, si inicias sesión, también en Supabase para usarlo en cualquier dispositivo.
+
+## Sincronización con Supabase (opcional)
+
+1. Crea un proyecto en https://supabase.com.
+2. En **SQL Editor**, ejecuta `supabase/schema.sql` (crea la tabla `progress` con Row Level Security).
+3. En **Authentication → URL Configuration**:
+   - **Site URL**: la URL de Vercel (p. ej. `https://cert-corredor.vercel.app`).
+   - **Redirect URLs**: agrega esa URL y `http://localhost:5173`.
+4. En **Project Settings → API**, copia la *Project URL* y la llave *anon public*:
+   - Local: copia `.env.example` como `.env.local` y complétalo.
+   - Vercel: **Settings → Environment Variables** → `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`, y vuelve a desplegar.
+5. (Opcional) Para que el correo incluya también un código de 6 dígitos, en **Authentication → Email Templates → Magic Link** agrega `{{ .Token }}` a la plantilla.
+
+Nunca uses la llave `service_role` en esta app.
 
 ## Notas sobre las respuestas
 
